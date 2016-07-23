@@ -92,7 +92,7 @@ func (bl *BlobLog) GetMeta(id int64) (int64, int64, error) {
 		return 0, 0, e
 	}
 	if n != 16 {
-		return 0, 0, fmt.Errorf("n!=16")
+		return 0, 0, fmt.Errorf("n != 16")
 	}
 	return b2i(res[:8]), b2i(res[8:]), nil
 }
@@ -114,7 +114,7 @@ func (bl *BlobLog) Write(id int64, in []byte) error {
 }
 
 func (bl *BlobLog) Insert(data []byte) (id int64, e error) {
-	id, e = bl.Prepare(len(data))
+	id, e = bl.Prepare(int64(len(data)))
 	if e != nil {
 		return 0, e
 	}
