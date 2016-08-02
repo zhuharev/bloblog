@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 )
 
 var (
@@ -14,6 +15,7 @@ type BlobLog struct {
 	f *os.File
 
 	indexSize int64
+	rwmu      sync.RWMutex
 }
 
 func Open(fpath string, indexSizes ...int64) (*BlobLog, error) {
@@ -58,6 +60,9 @@ func Open(fpath string, indexSizes ...int64) (*BlobLog, error) {
 }
 
 func (bl *BlobLog) LastInserId() (int64, error) {
+	bl.rwmu.RLock()
+	defer bl.rwmu.RUnlock()
+
 	var res = make([]byte, 8)
 	_, e := bl.f.ReadAt(res, 8)
 	if e != nil {
@@ -79,6 +84,10 @@ func (bl *BlobLog) Prepare(size int64) (int64, error) {
 	if e != nil {
 		return 0, e
 	}
+
+	bl.rwmu.Lock()
+	defer bl.rwmu.Unlock()
+
 	e = bl.f.Truncate(stat.Size() + size)
 	if e != nil {
 		return 0, e
@@ -112,6 +121,9 @@ func (bl *BlobLog) GetMeta(id int64) (int64, int64, error) {
 		return 0, 0, e
 	}
 
+	bl.rwmu.RLock()
+	defer bl.rwmu.RUnlock()
+
 	if id == 1 {
 		off := int64(16)
 		var res = make([]byte, 8)
@@ -141,7 +153,7 @@ func (bl *BlobLog) GetMeta(id int64) (int64, int64, error) {
 		if n != 16 {
 			return 0, 0, fmt.Errorf("n != 16")
 		}
-		return b2i(res[:8]), b2i(res[8:]) - b2i(res[:8]), nil
+		return b2i(res[:8]) + bl.indexSize, b2i(res[8:]) - b2i(res[:8]), nil
 	}
 
 }
@@ -158,6 +170,10 @@ func (bl *BlobLog) Write(id int64, in []byte) error {
 	if e != nil {
 		return e
 	}*/
+
+	bl.rwmu.Lock()
+	defer bl.rwmu.Unlock()
+
 	n, e := bl.f.WriteAt(in, offset)
 	if int64(n) != size {
 		return fmt.Errorf("Written %d, need %d", n, size)
@@ -179,7 +195,12 @@ func (bl *BlobLog) Get(id int64) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
+	fmt.Println(offset, size)
 	res := make([]byte, size)
+
+	bl.rwmu.RLock()
+	defer bl.rwmu.RUnlock()
+
 	_, e = bl.f.ReadAt(res, offset)
 	if e != nil {
 		return nil, e
@@ -190,6 +211,10 @@ func (bl *BlobLog) Get(id int64) ([]byte, error) {
 func (bl *BlobLog) Dump() {
 	li, _ := bl.LastInserId()
 	var d = make([]byte, 8)
+
+	bl.rwmu.RLock()
+	defer bl.rwmu.RUnlock()
+
 	for i := int64(0); i < li+2; i++ {
 		bl.f.ReadAt(d, i*8)
 		fmt.Println(b2i(d))
