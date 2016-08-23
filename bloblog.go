@@ -59,6 +59,13 @@ func Open(fpath string, indexSizes ...int64) (*BlobLog, error) {
 	return bl, nil
 }
 
+func (bl *BlobLog) Close() error {
+	if bl.f != nil {
+		return bl.f.Close()
+	}
+	return nil
+}
+
 func (bl *BlobLog) LastInserId() (int64, error) {
 	bl.rwmu.RLock()
 	defer bl.rwmu.RUnlock()
